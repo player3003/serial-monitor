@@ -20,9 +20,9 @@ echo [完成] Docker 已运行
 echo.
 
 :: 启动所有服务
-echo [2/3] 启动所有服务...
+echo [2/3] 正在构建并启动服务 (可能需要几分钟)...
 cd webserial
-docker-compose up -d
+docker-compose up -d --build
 if %errorlevel% neq 0 (
     echo [错误] 启动失败
     pause
