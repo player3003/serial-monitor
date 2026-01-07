@@ -94,6 +94,39 @@ export function configureDevice(deviceId, config) {
 }
 
 /**
+ * 添加设备数据转发规则
+ * 后端接口: POST /api/device/{fromId}/forward/{toId}
+ */
+export function addForwardRule(fromId, toId) {
+  return request({
+    url: `/device/${fromId}/forward/${toId}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 删除设备数据转发规则
+ * 后端接口: DELETE /api/device/{fromId}/forward/{toId}
+ */
+export function deleteForwardRule(fromId, toId) {
+  return request({
+    url: `/device/${fromId}/forward/${toId}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 获取设备数据转发规则列表
+ * 后端接口: GET /api/device/{fromId}/forward
+ */
+export function getForwardRules(fromId) {
+  return request({
+    url: `/device/${fromId}/forward`,
+    method: 'get'
+  })
+}
+
+/**
  * 获取设备历史数据
  * 后端接口: GET /api/device/{deviceId}/data?from={timestamp}&to={timestamp}
  */
