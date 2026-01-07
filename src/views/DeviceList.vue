@@ -167,8 +167,14 @@ const handleDelete = async (device) => {
 const onDeviceStatusUpdate = (data) => {
   const device = devices.value.find(d => d.id === data.deviceId)
   if (device) {
+    if (device.status !== data.status) {
+       ElMessage.info(`设备 ${device.name} ${data.status === 'online' ? '上线' : '下线'}`)
+    }
     device.status = data.status
-    device.lastUpdateTime = new Date().toISOString()
+    device.lastUpdateTime = data.timestamp ? dayjs(data.timestamp).toISOString() : new Date().toISOString()
+  } else if (data.status === 'online') {
+    // 新设备上线，刷新列表
+    refreshDevices()
   }
 }
 
@@ -176,11 +182,11 @@ onMounted(() => {
   fetchDevices()
   
   // 监听设备状态更新
-  websocket.on('device_status', onDeviceStatusUpdate)
+  websocket.on('device_status_change', onDeviceStatusUpdate)
 })
 
 onUnmounted(() => {
-  websocket.off('device_status', onDeviceStatusUpdate)
+  websocket.off('device_status_change', onDeviceStatusUpdate)
 })
 </script>
 
