@@ -80,36 +80,45 @@ class WebSocketClient {
    */
   onRealtimeMessage(message) {
     try {
+      // DEBUG: 打印收到的原始消息
+      console.log('WS Raw Message:', message.body)
       const data = JSON.parse(message.body)
-      console.log('收到实时数据:', data)
-
+      
+      // 兼容后端新旧字段
       const type = data.type || data.messageType || 'telemetry'
       
-      if (type === 'telemetry' || type === 'sensor_data') {
+      // 1. 设备状态变更消息
+      if (type === 'device_status') {
+          console.log(`设备状态变更: ${data.deviceId} -> ${data.status}`)
+          this.emit('device_status_change', {
+              deviceId: data.deviceId,
+              status: data.status,
+              timestamp: data.timestamp
+          })
+          return
+      }
+
+      // 2. 串口数据消息
+      if (type === 'serial_data' || type === 'telemetry' || type === 'sensor_data' || type === 'command' || type === 'status') {
+          const rawData = data.data || data.rawData || '' // 兼容
           this.emit('serial_data', {
             deviceId: data.deviceId,
-            data: data.rawData,
+            data: rawData,
             payload: data.payload,
-            timestamp: data.timestamp
+            timestamp: data.timestamp,
+            type: data.subType || type
           })
+          
+          // 如果收到数据，也隐含设备在线 (除非是离线消息，但离线消息应该走 device_status)
           if (data.deviceId) {
-            this.emit('device_status', {
+            this.emit('device_data_received', {
               deviceId: data.deviceId,
-              status: 'online',
               timestamp: data.timestamp
             })
           }
-      } else if (type === 'status') {
-          this.emit('device_status', {
-            deviceId: data.deviceId,
-            status: data.payload?.status || 'online',
-            timestamp: data.timestamp
-          })
-      } else {
-          this.emit('message', data)
       }
-    } catch (error) {
-      console.error('解析消息失败:', error)
+    } catch (e) {
+      console.error('解析消息失败', e)
     }
   }
 
