@@ -82,6 +82,18 @@ export function sendSerialCommand(data) {
 }
 
 /**
+ * 配置设备
+ * 后端接口: POST /api/device/{deviceId}/config
+ */
+export function configureDevice(deviceId, config) {
+  return request({
+    url: `/device/${deviceId}/config`,
+    method: 'post',
+    data: config
+  })
+}
+
+/**
  * 获取设备历史数据
  * 后端接口: GET /api/device/{deviceId}/data?from={timestamp}&to={timestamp}
  */
