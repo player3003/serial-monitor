@@ -14,23 +14,128 @@
     </div>
     
     <div class="assistant-layout">
-      <!-- 左侧：数据收发区 -->
+      <!-- 左侧：串口设置 -->
+      <el-card class="settings-panel">
+        <template #header>
+          <div class="settings-header">
+            <span>串口设置</span>
+            <div style="display:flex; gap: 5px">
+                 <el-button size="small" type="warning" text @click="showForwardDialog = true">
+                    <el-icon><Connection /></el-icon>
+                 </el-button>
+                 <el-tag size="small" :type="isPortOpen ? 'success' : 'info'">
+                   {{ isPortOpen ? '已打开' : '已关闭' }}
+                 </el-tag>
+            </div>
+          </div>
+        </template>
+        
+        <el-form label-position="left" label-width="70px" size="default">
+          <el-form-item label="端口号">
+            <el-select v-model="serialConfig.port" disabled placeholder="选择端口">
+              <el-option label="COM1" value="COM1" />
+              <el-option label="COM3" value="COM3" />
+              <el-option label="COM4" value="COM4" />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="波特率">
+            <el-select v-model="serialConfig.baudRate" :disabled="isPortOpen">
+              <el-option v-for="rate in baudRateOptions" :key="rate" :label="rate" :value="rate" />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="数据位">
+            <el-select v-model="serialConfig.dataBits" :disabled="isPortOpen">
+              <el-option label="5" :value="5" />
+              <el-option label="6" :value="6" />
+              <el-option label="7" :value="7" />
+              <el-option label="8" :value="8" />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="校验位">
+            <el-select v-model="serialConfig.parity" :disabled="isPortOpen">
+              <el-option label="None" value="None" />
+              <el-option label="Odd" value="Odd" />
+              <el-option label="Even" value="Even" />
+              <el-option label="Mark" value="Mark" />
+              <el-option label="Space" value="Space" />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="停止位">
+            <el-select v-model="serialConfig.stopBits" :disabled="isPortOpen">
+              <el-option label="1" :value="1" />
+              <el-option label="1.5" :value="1.5" />
+              <el-option label="2" :value="2" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="流控">
+             <div class="flow-control">
+               <el-checkbox label="DTR" size="small" />
+               <el-checkbox label="RTS" size="small" />
+             </div>
+          </el-form-item>
+        </el-form>
+
+        <div class="settings-actions">
+           <el-button 
+             :type="isPortOpen ? 'danger' : 'primary'" 
+             class="action-btn" 
+             @click="handleOpenSerial"
+           >
+             {{ isPortOpen ? '关闭串口' : '打开串口' }}
+           </el-button>
+        </div>
+
+        <el-divider />
+        
+        <div class="panel-section">
+          <div class="section-title">接收设置</div>
+          <el-checkbox v-model="receiveOptions.hexDisplay">HEX显示</el-checkbox>
+          <el-checkbox v-model="receiveOptions.showTimestamp">显示时间戳</el-checkbox>
+          <el-checkbox v-model="receiveOptions.autoScroll">自动滚动</el-checkbox>
+          <el-checkbox v-model="receiveOptions.pause">暂停接收</el-checkbox>
+          <el-button size="small" style="width: 100%; margin-top: 5px" @click="saveToFile">
+            保存接收数据
+          </el-button>
+        </div>
+
+        <el-divider />
+
+        <div class="panel-section">
+          <div class="section-title">发送设置</div> 
+          <el-checkbox v-model="sendOptions.hexSend">HEX发送</el-checkbox>
+          <el-checkbox v-model="sendOptions.addNewLine">发送新行</el-checkbox>
+          <el-checkbox v-model="sendOptions.showSent">显示发送</el-checkbox>
+          <div class="timer-send">
+            <el-checkbox v-model="sendOptions.timedSend">定时发送</el-checkbox>
+            <el-input-number 
+              v-model="sendOptions.interval" 
+              size="small" 
+              :min="100" 
+              :step="100" 
+              controls-position="right"
+              style="width: 90px"
+              :disabled="!sendOptions.timedSend"
+            /> ms
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 中间：数据收发区 -->
       <el-card class="data-panel">
         <!-- 工具栏 -->
         <div class="toolbar">
-          <el-radio-group v-model="displayMode" size="small">
-            <el-radio-button label="text">文本模式</el-radio-button>
-            <el-radio-button label="hex">HEX模式</el-radio-button>
-          </el-radio-group>
+          <!-- 移除旧的单选框，改用左侧设置 -->
+          <div style="flex: 1"></div>
           
           <div class="toolbar-actions">
             <el-button size="small" @click="clearReceiveData">
               <el-icon><Delete /></el-icon>
               清空
-            </el-button>
-            <el-button size="small" @click="saveToFile">
-              <el-icon><Download /></el-icon>
-              保存
             </el-button>
           </div>
         </div>
@@ -39,16 +144,20 @@
         <div class="receive-area">
           <div class="area-header">
             <span>接收区 ({{ receiveData.length }}条)</span>
-            <el-checkbox v-model="autoScroll">自动滚动</el-checkbox>
+            <!-- 移除旧的 checkbox，功能移至左侧 -->
           </div>
           <div ref="receiveBox" class="data-box">
             <div
               v-for="(item, index) in receiveData"
               :key="index"
-              class="data-item receive-item"
+              class="data-item"
+              :class="item.type === 'sent' ? 'sent-item' : 'receive-item'"
             >
-              <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
-              <span class="data-content">{{ formatData(item.data) }}</span>
+              <span v-if="receiveOptions.showTimestamp" class="timestamp">[{{ formatTime(item.timestamp) }}]</span>
+              <span class="data-content" :style="{ color: item.type === 'sent' ? '#409eff' : '#67c23a' }">
+                {{ item.type === 'sent' ? 'SEND: ' : 'RECV: ' }}
+                {{ formatData(item.data) }}
+              </span>
             </div>
           </div>
         </div>
@@ -57,10 +166,7 @@
         <div class="send-area">
           <div class="area-header">
             <span>发送区</span>
-            <div class="send-options">
-              <el-checkbox v-model="sendOptions.addNewLine">添加换行</el-checkbox>
-              <el-checkbox v-model="sendOptions.showSent">显示发送</el-checkbox>
-            </div>
+             <!-- 移除旧的 checkbox，功能移至左侧 -->
           </div>
           <div class="send-input-area">
             <el-input
@@ -68,10 +174,10 @@
               type="textarea"
               :rows="3"
               placeholder="请输入要发送的数据"
-              @keydown.ctrl.enter="handleSend"
+              @keydown.ctrl.enter="handleSend(false)"
             />
             <div class="send-buttons">
-              <el-button type="primary" :loading="sending" @click="handleSend">
+              <el-button type="primary" :loading="sending" @click="handleSend(false)">
                 发送 (Ctrl+Enter)
               </el-button>
             </div>
@@ -164,6 +270,29 @@
         <el-button type="primary" @click="addQuickCommand">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 透传设置对话框 -->
+    <el-dialog v-model="showForwardDialog" title="数据转发配置 (透传)" width="500px" @open="fetchForwardRules">
+      <div class="forward-info">
+          <p>将当前设备 ({{ currentDevice?.name }}) 的串口收到的所有数据转发给：</p>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <el-select v-model="selectedTarget" placeholder="选择目标设备" style="flex: 1">
+              <el-option v-for="item in availableDevices" :key="item.value" :label="item.label" :value="item.value"/>
+          </el-select>
+          <el-button type="primary" @click="handleAddForward" :disabled="!selectedTarget">添加</el-button>
+      </div>
+
+      <el-table :data="forwardTargets.map(id => ({id}))" border stripe empty-text="暂无转发规则">
+          <el-table-column label="目标设备ID" prop="id" />
+          <el-table-column label="操作" width="100" align="center">
+              <template #default="scope">
+                  <el-button type="danger" size="small" @click="handleDeleteForward(scope.row.id)" icon="Delete" circle />
+              </template>
+          </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -172,7 +301,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useDeviceStore } from '@/store/device'
-import { sendSerialCommand } from '@/api/device'
+import { sendSerialCommand, configureDevice, addForwardRule, deleteForwardRule, getForwardRules } from '@/api/device'
 import websocket from '@/utils/websocket'
 import { stringToHex, hexToString, isValidHex } from '@/utils/dataParser'
 import dayjs from 'dayjs'
@@ -184,9 +313,101 @@ const deviceStore = useDeviceStore()
 const deviceId = route.params.id
 const currentDevice = computed(() => deviceStore.currentDevice)
 
+// 透传转发
+const showForwardDialog = ref(false)
+const forwardTargets = ref([]) // 当前已配置的转发目标ID列表
+const availableDevices = computed(() => {
+  return deviceStore.devices
+    .filter(d => d.id !== deviceId) // 排除自己
+    .map(d => ({ label: `${d.name} (${d.id})`, value: d.id }))
+})
+const selectedTarget = ref('')
+
+// 获取转发规则
+const fetchForwardRules = async () => {
+    try {
+        const rules = await getForwardRules(deviceId)
+        forwardTargets.value = Array.isArray(rules) ? rules : []
+    } catch (e) {
+        console.error('获取转发规则失败', e)
+    }
+}
+
+// 添加转发规则
+const handleAddForward = async () => {
+    if(!selectedTarget.value) return
+    try {
+        await addForwardRule(deviceId, selectedTarget.value)
+        ElMessage.success('添加转发规则成功')
+        selectedTarget.value = ''
+        fetchForwardRules()
+    } catch (error) {
+        ElMessage.error('添加转发规则失败')
+    }
+}
+
+// 删除转发规则
+const handleDeleteForward = async (targetId) => {
+    try {
+        await deleteForwardRule(deviceId, targetId)
+        ElMessage.success('删除转发规则成功')
+        fetchForwardRules()
+    } catch (error) {
+        ElMessage.error('删除转发规则失败')
+    }
+}
+
+// 串口配置
+const serialConfig = reactive({
+  port: 'COM1',
+  baudRate: 115200,
+  dataBits: 8,
+  parity: 'None',
+  stopBits: 1
+})
+const isPortOpen = ref(false)
+
+// 常用波特率
+const baudRateOptions = [
+  1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+]
+
+const handleOpenSerial = async () => {
+  try {
+    if (isPortOpen.value) {
+      // 关闭串口逻辑 (暂未实现后端关闭接口，仅前端状态切换)
+      isPortOpen.value = false
+      ElMessage.success('串口已关闭')
+      return
+    }
+
+    // 发送配置到后端
+    await configureDevice(deviceId, {
+      baudRate: serialConfig.baudRate,
+      dataBits: serialConfig.dataBits,
+      parity: serialConfig.parity,
+      stopBits: serialConfig.stopBits,
+      status: 'online'
+    })
+    
+    isPortOpen.value = true
+    ElMessage.success('串口已打开')
+  } catch (error) {
+    console.error('配置串口失败:', error)
+    ElMessage.error('打开串口失败')
+  }
+}
+
 // 显示模式
-const displayMode = ref('text')
-const autoScroll = ref(true)
+// const displayMode = ref('text') // 已废弃，使用 receiveOptions.hexDisplay
+// const autoScroll = ref(true) // 已废弃，使用 receiveOptions.autoScroll
+
+const receiveOptions = reactive({
+  hexDisplay: false,
+  showTimestamp: true,
+  autoScroll: true,
+  pause: false
+})
 
 // 接收数据
 const receiveData = ref([])
@@ -196,8 +417,42 @@ const receiveBox = ref(null)
 const sendText = ref('')
 const sending = ref(false)
 const sendOptions = reactive({
+  hexSend: false,
   addNewLine: true,
-  showSent: true
+  showSent: true,
+  timedSend: false,
+  interval: 1000
+})
+let sendTimer = null
+
+// 监听定时发送开启/关闭
+watch(() => sendOptions.timedSend, (val) => {
+  if (val) {
+    if (!sendTimer) {
+      sendTimer = setInterval(() => {
+        if (isPortOpen.value && sendText.value) {
+          handleSend(true) // Pass true to indicate auto send
+        }
+      }, sendOptions.interval)
+    }
+  } else {
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = null
+    }
+  }
+})
+
+// 监听定时时间间隔变化
+watch(() => sendOptions.interval, (val) => {
+  if (sendOptions.timedSend && sendTimer) {
+    clearInterval(sendTimer)
+    sendTimer = setInterval(() => {
+      if (isPortOpen.value && sendText.value) {
+        handleSend(true)
+      }
+    }, val)
+  }
 })
 
 // 快捷指令
@@ -219,7 +474,9 @@ let connectionTimer = null
 
 // 格式化数据
 const formatData = (data) => {
-  if (displayMode.value === 'hex') {
+  // 如果是HEX显示模式，则转换
+  if (receiveOptions.hexDisplay) {
+    // 假设data本身是文本，如果需要HEX显示
     return stringToHex(data)
   }
   return data
@@ -239,15 +496,20 @@ const formatDuration = (seconds) => {
 }
 
 // 发送数据
-const handleSend = async () => {
-  if (!sendText.value.trim()) {
-    ElMessage.warning('请输入要发送的数据')
+const handleSend = async (isAuto = false) => {
+  if (!sendText.value) { // 允许发送空格，只是非空校验
+    if (!isAuto) ElMessage.warning('请输入要发送的数据')
     return
   }
   
-  // 验证HEX格式
-  if (displayMode.value === 'hex' && !isValidHex(sendText.value)) {
-    ElMessage.error('HEX格式不正确，请输入如：01 02 03')
+  // 验证HEX发送格式
+  if (sendOptions.hexSend && !isValidHex(sendText.value)) {
+    if (!isAuto) ElMessage.error('HEX格式不正确，请输入如：01 02 03')
+    return
+  }
+  
+  if (!isPortOpen.value) {
+    if (!isAuto) ElMessage.warning('请先打开串口')
     return
   }
   
@@ -255,14 +517,21 @@ const handleSend = async () => {
   try {
     let dataToSend = sendText.value
     
-    // HEX模式转换
-    if (displayMode.value === 'hex') {
+    // HEX发送模式转换：如果是HEX发送，输入的是HEX字符串，需要转换为实际字符发送给后端
+    // 但后端现在除了 raw string 外，如果前端给的是 hex string 怎么处理？
+    // 通常串口助手 "Hex Send" 意味着用户输入 "31 32", 实际发送 bytes 0x31 0x32 ('1', '2')
+    // 我们现有的 hexToString 工具正是做这个： "31 32" -> "12"
+    if (sendOptions.hexSend) {
       dataToSend = hexToString(sendText.value)
     }
     
-    // 添加换行
-    if (sendOptions.addNewLine) {
+    // 添加换行 (仅在文本发送模式下有效，或者Hex模式下需不需要由用户决定？通常Hex模式不自动加换行，除非用户写了 0D 0A)
+    // 根据通用逻辑，Hex发送通常不自动加换行，除非有明确选项。这里简单处理：如果是文本模式且勾选，则加。
+    if (!sendOptions.hexSend && sendOptions.addNewLine) {
       dataToSend += '\n'
+    } else if (sendOptions.hexSend && sendOptions.addNewLine) {
+        // Hex模式下加换行意味着追加 0D 0A
+        dataToSend += '\r\n' 
     }
     
     await sendSerialCommand({
@@ -276,16 +545,17 @@ const handleSend = async () => {
     if (sendOptions.showSent) {
       receiveData.value.push({
         timestamp: Date.now(),
-        data: sendText.value,
+        data: dataToSend, // 这里存原始发送出的数据，显示时会经过 formatData 处理
         type: 'sent'
       })
     }
     
-    sendText.value = ''
-    ElMessage.success('发送成功')
+    // 非定时发送才清空？通常串口助手不清空，方便重复发送。这里保持不清空
+    // sendText.value = '' 
+    if (!isAuto) ElMessage.success('发送成功')
     
     // 自动滚动
-    if (autoScroll.value) {
+    if (receiveOptions.autoScroll) {
       scrollToBottom()
     }
   } catch (error) {
@@ -310,7 +580,7 @@ const saveToFile = () => {
   }
   
   const content = receiveData.value
-    .map(item => `[${formatTime(item.timestamp)}] ${formatData(item.data)}`)
+    .map(item => `[${formatTime(item.timestamp)}] ${item.type === 'sent' ? 'SEND' : 'RECV'} -> ${receiveOptions.hexDisplay ? stringToHex(item.data) : item.data}`)
     .join('\n')
   
   const blob = new Blob([content], { type: 'text/plain' })
@@ -327,6 +597,7 @@ const saveToFile = () => {
 // 发送快捷指令
 const sendQuickCommand = (cmd) => {
   sendText.value = cmd.command
+  // 假设快捷指令也是遵循当前的 hexSend 设置，或者快捷指令应该自带类型？简单起见跟随当前设置
   handleSend()
 }
 
@@ -369,14 +640,19 @@ const scrollToBottom = () => {
 
 // 监听自动滚动
 watch(() => receiveData.value.length, () => {
-  if (autoScroll.value) {
+  if (receiveOptions.autoScroll) {
     scrollToBottom()
   }
 })
 
 // WebSocket数据接收
 const onSerialData = (data) => {
-  if (data.deviceId !== deviceId) return
+  console.log('Component received:', data, 'Target ID:', deviceId)
+  if (data.deviceId !== deviceId) {
+    console.log('Device ID mismatch, ignored.')
+    return
+  }
+  if (receiveOptions.pause) return // 暂停接收
   
   receiveData.value.push({
     timestamp: Date.now(),
@@ -408,7 +684,9 @@ onMounted(() => {
   
   // 开始计时
   connectionTimer = setInterval(() => {
-    connectionTime.value++
+    if (isPortOpen.value) {
+        connectionTime.value++
+    }
   }, 1000)
 })
 
@@ -416,6 +694,9 @@ onUnmounted(() => {
   websocket.off('serial_data', onSerialData)
   if (connectionTimer) {
     clearInterval(connectionTimer)
+  }
+  if (sendTimer) {
+    clearInterval(sendTimer)
   }
 })
 </script>
@@ -450,15 +731,70 @@ onUnmounted(() => {
 .assistant-layout {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
+  grid-template-columns: 240px 1fr 280px;
+  gap: 15px;
   overflow: hidden;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-btn {
+  width: 100%;
+}
+
+.flow-control {
+  display: flex;
+  gap: 10px;
 }
 
 .data-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.data-panel :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px 0;
+}
+
+.section-title {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: #606266;
+}
+
+.timer-send {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .toolbar {
@@ -492,7 +828,7 @@ onUnmounted(() => {
 }
 
 .data-box {
-  flex: 1;
+  height: 500px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   padding: 10px;
